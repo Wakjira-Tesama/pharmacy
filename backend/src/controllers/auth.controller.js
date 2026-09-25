@@ -10,7 +10,7 @@ const login = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Username and password are required' });
     }
 
-    const [rows] = await pool.query('SELECT * FROM users WHERE username = ? AND status = "ACTIVE"', [username]);
+    const [rows] = await pool.query("SELECT * FROM users WHERE username = ? AND status = 'ACTIVE'", [username]);
     
     if (rows.length === 0) {
       return res.status(401).json({ success: false, message: 'Invalid credentials or inactive account' });
