@@ -38,7 +38,8 @@ const login = async (req, res) => {
           id: user.id,
           name: user.name,
           username: user.username,
-          role: user.role
+          role: user.role,
+          profile_image: user.profile_image
         }
       }
     });
@@ -51,7 +52,7 @@ const login = async (req, res) => {
 
 const getMe = async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT id, name, username, email, role, status FROM users WHERE id = ?', [req.user.id]);
+    const [rows] = await pool.query('SELECT id, name, username, email, role, status, profile_image FROM users WHERE id = ?', [req.user.id]);
     
     if (rows.length === 0) {
       return res.status(404).json({ success: false, message: 'User not found' });
@@ -67,4 +68,86 @@ const getMe = async (req, res) => {
   }
 };
 
-module.exports = { login, getMe };
+const register = async (req, res) => {
+  try {
+    const { name, username, email, password, role } = req.body;
+    
+    if (!name || !username || !password) {
+      return res.status(400).json({ success: false, message: 'Name, username, and password are required' });
+    }
+
+    const [existing] = await pool.query('SELECT id FROM users WHERE username = ?', [username]);
+    if (existing.length > 0) {
+      return res.status(400).json({ success: false, message: 'Username already exists' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const assignedRole = (role === 'ADMIN' || role === 'PHARMACIST') ? role : 'PHARMACIST';
+    const userEmail = email || `${username}@pharmacy.local`;
+
+    const [result] = await pool.query(
+      'INSERT INTO users (name, username, email, password_hash, role) VALUES (?, ?, ?, ?, ?)',
+      [name, username, userEmail, passwordHash, assignedRole]
+    );
+
+    const token = jwt.sign(
+      { id: result.insertId, username, role: assignedRole, name },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      success: true,
+      message: 'Registration successful',
+      data: {
+        token,
+        user: { id: result.insertId, name, username, role: assignedRole }
+      }
+    });
+
+  } catch (error) {
+    console.error('Register error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error during registration' });
+  }
+};
+
+const updateProfile = async (req, res) => {
+  try {
+    const { name, username, password, profile_image } = req.body;
+    const userId = req.user.id;
+
+    if (!name || !username) {
+      return res.status(400).json({ success: false, message: 'Name and username are required' });
+    }
+
+    // Check if new username is already taken by someone else
+    const [existing] = await pool.query('SELECT id FROM users WHERE username = ? AND id != ?', [username, userId]);
+    if (existing.length > 0) {
+      return res.status(400).json({ success: false, message: 'Username is already taken' });
+    }
+
+    let query = 'UPDATE users SET name = ?, username = ?, profile_image = ?';
+    let params = [name, username, profile_image || null];
+
+    if (password) {
+      const passwordHash = await bcrypt.hash(password, 10);
+      query += ', password_hash = ?';
+      params.push(passwordHash);
+    }
+
+    query += ' WHERE id = ?';
+    params.push(userId);
+
+    await pool.query(query, params);
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+    });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error during profile update' });
+  }
+};
+
+module.exports = { login, getMe, register, updateProfile };

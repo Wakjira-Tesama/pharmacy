@@ -1,30 +1,41 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Alert, FlatList } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Alert, FlatList, ActivityIndicator } from 'react-native';
 import { ShoppingCart, Plus, Minus, Trash2 } from 'lucide-react-native';
-
-const MOCK_INVENTORY = [
-  { id: '1', name: 'Paracetamol 500mg', batch: 'B001', stock: 150, price: 10, expiry: '2026-10-10' },
-  { id: '2', name: 'Amoxicillin 500mg', batch: 'B004', stock: 20, price: 25, expiry: '2026-10-20' },
-  { id: '3', name: 'Ibuprofen 400mg', batch: 'B008', stock: 45, price: 15, expiry: '2027-01-15' },
-];
+import api from '../config/api';
 
 export default function POSScreen({ navigation }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState([]);
+  const [inventory, setInventory] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  React.useEffect(() => {
+    const fetchInventory = async () => {
+      try {
+        const response = await api.get('/stock/inventory');
+        if (response.data.success) {
+          setInventory(response.data.data);
+        }
+      } catch (e) {
+        console.error('Failed to load inventory for POS', e);
+      }
+    };
+    fetchInventory();
+  }, []);
   
-  const filteredInventory = MOCK_INVENTORY.filter(item => 
+  const filteredInventory = inventory.filter(item => 
     item.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const addToCart = (medicine) => {
-    const existing = cart.find(item => item.id === medicine.id);
+    const existing = cart.find(item => item.batch_id === medicine.batch_id);
     if (existing) {
       if (existing.quantity >= medicine.stock) {
         Alert.alert('Stock Limit', 'Cannot add more than available stock.');
         return;
       }
       setCart(cart.map(item => 
-        item.id === medicine.id ? { ...item, quantity: item.quantity + 1 } : item
+        item.batch_id === medicine.batch_id ? { ...item, quantity: item.quantity + 1 } : item
       ));
     } else {
       setCart([...cart, { ...medicine, quantity: 1 }]);
@@ -33,7 +44,7 @@ export default function POSScreen({ navigation }) {
 
   const updateQuantity = (id, delta) => {
     setCart(cart.map(item => {
-      if (item.id === id) {
+      if (item.batch_id === id) {
         const newQty = item.quantity + delta;
         if (newQty > 0 && newQty <= item.stock) {
           return { ...item, quantity: newQty };
@@ -44,19 +55,52 @@ export default function POSScreen({ navigation }) {
   };
 
   const removeFromCart = (id) => {
-    setCart(cart.filter(item => item.id !== id));
+    setCart(cart.filter(item => item.batch_id !== id));
   };
 
-  const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const total = cart.reduce((sum, item) => sum + (item.selling_price * item.quantity), 0);
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (cart.length === 0) return;
-    Alert.alert('Success', `Sale completed! Total: ${total} ETB`, [
-      { text: 'OK', onPress: () => {
-        setCart([]);
-        setSearchQuery('');
-      }}
-    ]);
+    
+    setLoading(true);
+    try {
+      const saleItems = cart.map(item => ({
+        batch_id: item.batch_id,
+        quantity: item.quantity,
+        unit_price: item.selling_price
+      }));
+
+      const response = await api.post('/sales', {
+        items: saleItems,
+        total_amount: total
+      });
+
+      if (response.data.success) {
+        Alert.alert('Success', `Sale completed! Total: ${total} ETB`, [
+          { text: 'OK', onPress: () => {
+            setCart([]);
+            setSearchQuery('');
+            // Refresh inventory to get new stock counts
+            const fetchInventory = async () => {
+              try {
+                const res = await api.get('/stock/inventory');
+                if (res.data.success) {
+                  setInventory(res.data.data);
+                }
+              } catch (e) {
+                console.error('Failed to load inventory for POS', e);
+              }
+            };
+            fetchInventory();
+          }}
+        ]);
+      }
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Checkout failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -74,24 +118,31 @@ export default function POSScreen({ navigation }) {
             onChangeText={setSearchQuery}
           />
           {searchQuery.length > 0 && (
-            <View style={styles.searchResults}>
+            <ScrollView 
+              style={styles.searchResults} 
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled={true}
+            >
               {filteredInventory.map(item => (
-                <TouchableOpacity key={item.id} style={styles.searchItem} onPress={() => addToCart(item)}>
+                <TouchableOpacity key={item.batch_id} style={styles.searchItem} onPress={() => {
+                  addToCart(item);
+                  setSearchQuery(''); // Clear search after adding to prevent clutter
+                }}>
                   <View>
                     <Text style={styles.searchItemName}>{item.name}</Text>
-                    <Text style={styles.searchItemSub}>Stock: {item.stock} | Price: {item.price} ETB</Text>
+                    <Text style={styles.searchItemSub}>Stock: {item.stock} | Price: {item.selling_price} ETB</Text>
                   </View>
                   <Plus color="#10b981" size={20} />
                 </TouchableOpacity>
               ))}
-            </View>
+            </ScrollView>
           )}
         </View>
 
         <Text style={styles.cartTitle}>Current Sale</Text>
         <FlatList
           data={cart}
-          keyExtractor={item => item.id}
+          keyExtractor={item => item.batch_id.toString()}
           ListEmptyComponent={
             <Text style={styles.emptyCart}>Cart is empty. Add medicines to sell.</Text>
           }
@@ -99,17 +150,17 @@ export default function POSScreen({ navigation }) {
             <View style={styles.cartItem}>
               <View style={styles.cartItemInfo}>
                 <Text style={styles.cartItemName}>{item.name}</Text>
-                <Text style={styles.cartItemPrice}>{item.price} ETB x {item.quantity}</Text>
+                <Text style={styles.cartItemPrice}>{item.selling_price} ETB x {item.quantity}</Text>
               </View>
               <View style={styles.cartItemControls}>
-                <TouchableOpacity onPress={() => updateQuantity(item.id, -1)} style={styles.qtyBtn}>
+                <TouchableOpacity onPress={() => updateQuantity(item.batch_id, -1)} style={styles.qtyBtn}>
                   <Minus size={16} color="#475569" />
                 </TouchableOpacity>
                 <Text style={styles.qtyText}>{item.quantity}</Text>
-                <TouchableOpacity onPress={() => updateQuantity(item.id, 1)} style={styles.qtyBtn}>
+                <TouchableOpacity onPress={() => updateQuantity(item.batch_id, 1)} style={styles.qtyBtn}>
                   <Plus size={16} color="#475569" />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => removeFromCart(item.id)} style={[styles.qtyBtn, { marginLeft: 8, backgroundColor: '#fee2e2' }]}>
+                <TouchableOpacity onPress={() => removeFromCart(item.batch_id)} style={[styles.qtyBtn, { marginLeft: 8, backgroundColor: '#fee2e2' }]}>
                   <Trash2 size={16} color="#ef4444" />
                 </TouchableOpacity>
               </View>
@@ -123,12 +174,14 @@ export default function POSScreen({ navigation }) {
             <Text style={styles.totalValue}>{total} ETB</Text>
           </View>
           <TouchableOpacity 
-            style={[styles.checkoutBtn, cart.length === 0 && styles.checkoutBtnDisabled]} 
+            style={[styles.checkoutBtn, (cart.length === 0 || loading) && styles.checkoutBtnDisabled]} 
             onPress={handleCheckout}
-            disabled={cart.length === 0}
+            disabled={cart.length === 0 || loading}
           >
-            <ShoppingCart color="#fff" size={20} />
-            <Text style={styles.checkoutBtnText}>Complete Sale</Text>
+            {loading ? <ActivityIndicator color="#fff" /> : <ShoppingCart color="#fff" size={20} />}
+            <Text style={styles.checkoutBtnText}>
+              {loading ? 'Processing...' : 'Complete Sale'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -157,7 +210,8 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   searchSection: {
-    zIndex: 10,
+    zIndex: 999, // High z-index
+    elevation: 10,
     marginBottom: 20,
   },
   searchInput: {
@@ -177,12 +231,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    maxHeight: 200,
+    maxHeight: 250, // Added explicit maxHeight so it scrolls properly
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 10,
-    elevation: 5,
+    elevation: 10, // Ensure shadow/elevation is high
   },
   searchItem: {
     flexDirection: 'row',

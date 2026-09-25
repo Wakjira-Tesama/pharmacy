@@ -11,9 +11,9 @@ const recordExpense = async (req, res) => {
     }
 
     const [result] = await pool.query(
-      `INSERT INTO expenses (expense_type, description, amount, payment_method, user_id, expense_date)
-       VALUES (?, ?, ?, ?, ?, CURDATE())`,
-      [expense_type, description, amount, payment_method || 'Cash', user_id]
+      `INSERT INTO expense_transactions (reference_type, description, amount, user_id)
+       VALUES (?, ?, ?, ?)`,
+      [expense_type, description || payment_method || 'Cash', amount, user_id]
     );
 
     // Audit log
@@ -33,9 +33,9 @@ const recordExpense = async (req, res) => {
 const getDailyFinance = async (req, res) => {
   try {
     // Today's Income
-    const [incomeRows] = await pool.query(`SELECT SUM(amount) as total_income FROM income_transactions WHERE DATE(transaction_date) = CURDATE()`);
+    const [incomeRows] = await pool.query(`SELECT SUM(amount) as total_income FROM income_transactions WHERE DATE(created_at) = CURDATE()`);
     // Today's Expense
-    const [expenseRows] = await pool.query(`SELECT SUM(amount) as total_expense FROM expenses WHERE expense_date = CURDATE()`);
+    const [expenseRows] = await pool.query(`SELECT SUM(amount) as total_expense FROM expense_transactions WHERE DATE(created_at) = CURDATE()`);
 
     const income = incomeRows[0].total_income || 0;
     const expense = expenseRows[0].total_expense || 0;
@@ -55,4 +55,35 @@ const getDailyFinance = async (req, res) => {
   }
 };
 
-module.exports = { recordExpense, getDailyFinance };
+// Get all expenses list
+const getExpenses = async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT e.*, u.name as user_name FROM expense_transactions e
+       LEFT JOIN users u ON e.user_id = u.id
+       ORDER BY e.created_at DESC LIMIT 50`
+    );
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error('Error getting expenses:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// Get all income list
+const getIncome = async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT i.*, u.name as user_name FROM income_transactions i
+       LEFT JOIN users u ON i.user_id = u.id
+       ORDER BY i.created_at DESC LIMIT 50`
+    );
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error('Error getting income:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+module.exports = { recordExpense, getDailyFinance, getExpenses, getIncome };
+

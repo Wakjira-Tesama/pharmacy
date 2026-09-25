@@ -47,4 +47,17 @@ const createMedicine = async (req, res) => {
   }
 };
 
-module.exports = { getAllMedicines, getMedicineById, createMedicine };
+// Get distinct categories
+const getCategories = async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT DISTINCT category FROM medicines WHERE category IS NOT NULL AND category != "" ORDER BY category ASC');
+    const categories = rows.map(r => r.category);
+    res.json({ success: true, data: categories });
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+module.exports = { getAllMedicines, getMedicineById, createMedicine, getCategories };
+

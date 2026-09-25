@@ -27,6 +27,13 @@ const getDashboardStats = async (req, res) => {
       WHERE current_quantity > 0 AND expiry_date < CURDATE()
     `);
 
+    // Today's sales
+    const [todaySales] = await pool.query(`
+      SELECT COUNT(*) as count, COALESCE(SUM(total), 0) as revenue 
+      FROM sales 
+      WHERE DATE(created_at) = CURDATE()
+    `);
+
     res.json({
       success: true,
       data: {
@@ -34,7 +41,9 @@ const getDashboardStats = async (req, res) => {
         totalStock: stockCount[0].total || 0,
         lowStock: lowStock[0].total || 0,
         expiringSoon: expiringSoon[0].total || 0,
-        expired: expired[0].total || 0
+        expired: expired[0].total || 0,
+        todaySalesCount: todaySales[0].count || 0,
+        todaysRevenue: todaySales[0].revenue || 0
       }
     });
   } catch (error) {

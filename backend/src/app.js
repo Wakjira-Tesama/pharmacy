@@ -9,11 +9,12 @@ const stockRoutes = require('./routes/stock.routes');
 const salesRoutes = require('./routes/sales.routes');
 const financeRoutes = require('./routes/finance.routes');
 const reportsRoutes = require('./routes/reports.routes');
+const usersRoutes = require('./routes/users.routes');
 
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(morgan('dev'));
 
 // Root route
@@ -28,7 +29,8 @@ app.get('/', (req, res) => {
       stock: '/api/stock/inventory',
       sales: '/api/sales',
       finance: '/api/finance/daily',
-      reports: '/api/reports/dashboard'
+      reports: '/api/reports/dashboard',
+      users: '/api/users'
     }
   });
 });
@@ -40,6 +42,7 @@ app.use('/api/stock', stockRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/finance', financeRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/users', usersRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {

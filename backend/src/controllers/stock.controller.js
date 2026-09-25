@@ -56,7 +56,7 @@ const stockIn = async (req, res) => {
 const getInventory = async (req, res) => {
   try {
     const query = `
-      SELECT m.id as medicine_id, m.name, m.medicine_code, m.minimum_stock, 
+      SELECT m.id as medicine_id, m.name, m.medicine_code, m.minimum_stock, m.category,
              b.id as batch_id, b.batch_number, b.expiry_date, b.selling_price, b.current_quantity as stock,
              DATEDIFF(b.expiry_date, CURDATE()) as days_to_expiry
       FROM medicines m
