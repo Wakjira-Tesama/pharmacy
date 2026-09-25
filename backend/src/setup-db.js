@@ -28,6 +28,7 @@ async function setupDatabase() {
       password_hash VARCHAR(255) NOT NULL,
       role ENUM('ADMIN', 'PHARMACIST') DEFAULT 'PHARMACIST',
       status ENUM('ACTIVE', 'INACTIVE') DEFAULT 'ACTIVE',
+      profile_image LONGTEXT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )
@@ -57,6 +58,8 @@ async function setupDatabase() {
       category VARCHAR(100),
       dosage_form VARCHAR(50),
       strength VARCHAR(50),
+      unit VARCHAR(20),
+      brand_name VARCHAR(150),
       manufacturer VARCHAR(100),
       description TEXT,
       minimum_stock INT DEFAULT 10,
@@ -279,7 +282,16 @@ async function setupDatabase() {
   await connection.end();
 }
 
-setupDatabase().catch(err => {
-  console.error('❌ Setup failed:', err.message);
-  process.exit(1);
-});
+if (process.env.DATABASE_URL) {
+  require('./setup-pg')().then(() => {
+    process.exit(0);
+  }).catch(err => {
+    console.error('❌ Setup failed:', err.message);
+    process.exit(1);
+  });
+} else {
+  setupDatabase().catch(err => {
+    console.error('❌ Setup failed:', err.message);
+    process.exit(1);
+  });
+}
