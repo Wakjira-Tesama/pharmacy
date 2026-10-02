@@ -165,6 +165,7 @@ async function setupDatabase() {
       amount DECIMAL(10,2) NOT NULL,
       description TEXT,
       user_id INT NOT NULL,
+      frequency VARCHAR(20) DEFAULT 'ONCE',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id)
     )

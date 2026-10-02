@@ -138,6 +138,7 @@ async function setupPostgres() {
       amount NUMERIC(10,2) NOT NULL,
       description TEXT,
       user_id INT NOT NULL REFERENCES users(id),
+      frequency VARCHAR(20) DEFAULT 'ONCE',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
