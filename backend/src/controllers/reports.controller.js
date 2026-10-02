@@ -129,6 +129,20 @@ const getPeriodReport = async (req, res) => {
       `SELECT id, total, created_at FROM sales WHERE DATE(created_at) >= ? AND DATE(created_at) <= ?`,
       [fromKey, toKey]
     );
+    const [costLines] = await pool.query(
+      `SELECT s.created_at, si.quantity, b.purchase_price
+       FROM sale_items si
+       JOIN sales s ON s.id = si.sale_id
+       JOIN medicine_batches b ON b.id = si.batch_id
+       WHERE DATE(s.created_at) >= ? AND DATE(s.created_at) <= ?`,
+      [fromKey, toKey]
+    );
+    const [expiredRows] = await pool.query(
+      `SELECT expiry_date, purchase_price, current_quantity
+       FROM medicine_batches
+       WHERE expiry_date >= ? AND expiry_date <= ?`,
+      [fromKey, toKey]
+    );
     const [sold] = await pool.query(
       `SELECT m.name, SUM(si.quantity) AS quantity, SUM(si.total) AS total
        FROM sale_items si
@@ -145,29 +159,52 @@ const getPeriodReport = async (req, res) => {
        ORDER BY created_at DESC`
     );
 
+    const round = (value) => Number((Number(value) || 0).toFixed(2));
     const salesByDay = {};
     for (const sale of sales) {
       const key = dayKey(sale.created_at);
-      if (!salesByDay[key]) salesByDay[key] = { count: 0, income: 0 };
+      if (!salesByDay[key]) salesByDay[key] = { count: 0 };
       salesByDay[key].count += 1;
-      salesByDay[key].income += Number(sale.total) || 0;
+    }
+    const purchaseByDay = {};
+    for (const line of costLines) {
+      const key = dayKey(line.created_at);
+      const cost = (Number(line.quantity) || 0) * (Number(line.purchase_price) || 0);
+      purchaseByDay[key] = (purchaseByDay[key] || 0) + cost;
+    }
+    const expiredByDay = {};
+    for (const batch of expiredRows) {
+      const key = dayKey(batch.expiry_date);
+      const cost = (Number(batch.current_quantity) || 0) * (Number(batch.purchase_price) || 0);
+      expiredByDay[key] = (expiredByDay[key] || 0) + cost;
     }
 
     const daily = days.map((day) => {
       const key = formatDay(day);
-      const income = salesByDay[key] ? salesByDay[key].income : 0;
+      const purchase = purchaseByDay[key] || 0;
+      const selling = purchase * 1.25;
+      const balance = selling - purchase;
       const expense = expenseOnDay(expenses, day);
+      const expiredCost = expiredByDay[key] || 0;
+      const net = balance - expense - expiredCost;
       return {
         date: key,
         salesCount: salesByDay[key] ? salesByDay[key].count : 0,
-        income: Number(income.toFixed(2)),
-        expense: Number(expense.toFixed(2)),
-        balance: Number((income - expense).toFixed(2))
+        purchase: round(purchase),
+        selling: round(selling),
+        balance: round(balance),
+        expense: round(expense),
+        expiredCost: round(expiredCost),
+        net: round(net)
       };
     });
 
-    const income = daily.reduce((sum, row) => sum + row.income, 0);
+    const purchase = daily.reduce((sum, row) => sum + row.purchase, 0);
+    const selling = daily.reduce((sum, row) => sum + row.selling, 0);
+    const balance = daily.reduce((sum, row) => sum + row.balance, 0);
     const expense = daily.reduce((sum, row) => sum + row.expense, 0);
+    const expiredCost = daily.reduce((sum, row) => sum + row.expiredCost, 0);
+    const net = daily.reduce((sum, row) => sum + row.net, 0);
     const spent = expenses
       .map((item) => {
         const created = dayKey(item.created_at);
@@ -199,9 +236,12 @@ const getPeriodReport = async (req, res) => {
         to: toKey,
         summary: {
           salesCount: daily.reduce((sum, row) => sum + row.salesCount, 0),
-          income: Number(income.toFixed(2)),
-          expense: Number(expense.toFixed(2)),
-          balance: Number((income - expense).toFixed(2))
+          purchase: round(purchase),
+          selling: round(selling),
+          balance: round(balance),
+          expense: round(expense),
+          expiredCost: round(expiredCost),
+          net: round(net)
         },
         days: daily,
         sold: sold.map((item) => ({
