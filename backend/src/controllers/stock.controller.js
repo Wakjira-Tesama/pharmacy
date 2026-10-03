@@ -4,8 +4,15 @@ const pool = require('../config/db');
 const stockIn = async (req, res) => {
   const connection = await pool.getConnection();
   try {
-    const { medicine_id, batch_number, manufacturing_date, expiry_date, purchase_price, selling_price, quantity, supplier_id } = req.body;
+    const { medicine_id, batch_number, manufacturing_date, expiry_date, purchase_price, selling_price, quantity, supplier_id, category } = req.body;
     const user_id = req.user.id;
+    const purchase = Number(purchase_price);
+    const qty = parseInt(quantity, 10);
+    const selling = selling_price ? Number(selling_price) : Number((purchase * 1.25).toFixed(2));
+
+    if (!medicine_id || !batch_number || !expiry_date || !purchase || purchase <= 0 || !qty || qty <= 0 || !selling || selling <= 0) {
+      return res.status(400).json({ success: false, message: 'Medicine, quantity, purchase price, and expiry date are required' });
+    }
 
     await connection.beginTransaction();
 
@@ -18,27 +25,34 @@ const stockIn = async (req, res) => {
 
     if (existingBatch.length > 0) {
       batch_id = existingBatch[0].id;
-      previous_quantity = existingBatch[0].current_quantity;
-      new_quantity = previous_quantity + parseInt(quantity);
-      
+      previous_quantity = Number(existingBatch[0].current_quantity) || 0;
+      new_quantity = previous_quantity + qty;
+
       await connection.query(
-        'UPDATE medicine_batches SET current_quantity = ?, quantity_received = quantity_received + ? WHERE id = ?',
-        [new_quantity, quantity, batch_id]
+        'UPDATE medicine_batches SET current_quantity = ?, quantity_received = quantity_received + ?, purchase_price = ?, selling_price = ?, expiry_date = ? WHERE id = ?',
+        [new_quantity, qty, purchase, selling, expiry_date, batch_id]
       );
     } else {
       const [batchResult] = await connection.query(
         `INSERT INTO medicine_batches (medicine_id, batch_number, manufacturing_date, expiry_date, purchase_price, selling_price, quantity_received, current_quantity, supplier_id)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [medicine_id, batch_number, manufacturing_date, expiry_date, purchase_price, selling_price, quantity, quantity, supplier_id]
+        [medicine_id, batch_number, manufacturing_date || null, expiry_date, purchase, selling, qty, qty, supplier_id || null]
       );
       batch_id = batchResult.insertId;
+    }
+
+    if (category && String(category).trim()) {
+      await connection.query(
+        'UPDATE medicines SET category = ? WHERE id = ?',
+        [String(category).trim().slice(0, 100), medicine_id]
+      );
     }
 
     // 2. Create Stock Transaction
     await connection.query(
       `INSERT INTO stock_transactions (medicine_id, batch_id, transaction_type, quantity, previous_quantity, new_quantity, user_id, reason)
        VALUES (?, ?, 'STOCK_IN', ?, ?, ?, ?, ?)`,
-      [medicine_id, batch_id, quantity, previous_quantity, new_quantity, user_id, 'New stock received']
+      [medicine_id, batch_id, qty, previous_quantity, new_quantity, user_id, 'New stock received']
     );
 
     await connection.commit();

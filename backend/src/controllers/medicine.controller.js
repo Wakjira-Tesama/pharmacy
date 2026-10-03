@@ -50,7 +50,7 @@ const createMedicine = async (req, res) => {
 // Get distinct categories
 const getCategories = async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT DISTINCT category FROM medicines WHERE category IS NOT NULL AND category != "" ORDER BY category ASC');
+    const [rows] = await pool.query(`SELECT DISTINCT category FROM medicines WHERE category IS NOT NULL AND category <> '' ORDER BY category ASC`);
     const categories = rows.map(r => r.category);
     res.json({ success: true, data: categories });
   } catch (error) {
