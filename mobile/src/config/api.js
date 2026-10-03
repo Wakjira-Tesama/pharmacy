@@ -9,6 +9,7 @@ const BASE_URL = 'https://pharmacy-api-29ih.onrender.com/api';
 
 const api = axios.create({
   baseURL: BASE_URL,
+  timeout: 20000,
 });
 
 // Add a request interceptor to attach the JWT token to every request
