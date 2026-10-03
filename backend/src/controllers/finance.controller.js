@@ -144,5 +144,66 @@ const getIncome = async (req, res) => {
   }
 };
 
-module.exports = { recordExpense, getDailyFinance, getExpenses, getIncome };
+const updateExpense = async (req, res) => {
+  try {
+    await ensureExpenseColumns();
+    const id = Number(req.params.id);
+    const { expense_type, description, amount, frequency } = req.body;
+    const schedule = FREQUENCIES.includes(frequency) ? frequency : 'ONCE';
+    const numericAmount = Number(amount);
+    const type = String(expense_type || '').trim().slice(0, 50);
+
+    if (!id || !type || !numericAmount || numericAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'Expense type and a positive amount are required' });
+    }
+
+    const [existing] = await pool.query('SELECT id FROM expense_transactions WHERE id = ?', [id]);
+    if (!existing.length) {
+      return res.status(404).json({ success: false, message: 'Expense not found' });
+    }
+
+    await pool.query(
+      `UPDATE expense_transactions
+       SET reference_type = ?, description = ?, amount = ?, frequency = ?
+       WHERE id = ?`,
+      [type, description ? String(description).trim() : null, numericAmount, schedule, id]
+    );
+    await pool.query(
+      `INSERT INTO audit_logs (user_id, action, module, record_id, description) VALUES (?, 'UPDATE_EXPENSE', 'FINANCE', ?, 'Updated expense')`,
+      [req.user.id, id]
+    );
+
+    res.json({ success: true, message: 'Expense updated' });
+  } catch (error) {
+    console.error('Error updating expense:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+const deleteExpense = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Expense id is required' });
+    }
+
+    const [existing] = await pool.query('SELECT id FROM expense_transactions WHERE id = ?', [id]);
+    if (!existing.length) {
+      return res.status(404).json({ success: false, message: 'Expense not found' });
+    }
+
+    await pool.query('DELETE FROM expense_transactions WHERE id = ?', [id]);
+    await pool.query(
+      `INSERT INTO audit_logs (user_id, action, module, record_id, description) VALUES (?, 'DELETE_EXPENSE', 'FINANCE', ?, 'Deleted expense')`,
+      [req.user.id, id]
+    );
+
+    res.json({ success: true, message: 'Expense deleted' });
+  } catch (error) {
+    console.error('Error deleting expense:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+module.exports = { recordExpense, getDailyFinance, getExpenses, getIncome, updateExpense, deleteExpense };
 
