@@ -1,7 +1,7 @@
 import React, { useState, useContext } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, TouchableWithoutFeedback, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, TouchableWithoutFeedback, Platform, Image } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Menu, Home, Package, DollarSign, Users as UsersIcon, UserCircle, User, LogOut } from 'lucide-react-native';
+import { Menu, Home, Package, DollarSign, Users as UsersIcon, UserCircle, User, LogOut, BarChart3 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { AuthContext } from '../context/AuthContext';
 
@@ -11,6 +11,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 
 import FinanceScreen from '../screens/FinanceScreen';
 import UsersScreen from '../screens/UsersScreen';
+import ReportScreen from '../screens/ReportScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -34,7 +35,7 @@ const NavigationMenu = () => {
           <View style={styles.modalBackground}>
             <View style={styles.webConstraint}>
               <TouchableWithoutFeedback>
-                <View style={[styles.dropdownContainer, { right: 15, left: 'auto' }]}>
+                <View style={[styles.dropdownContainer, { left: 15, right: 'auto' }]}>
                   <TouchableOpacity style={styles.menuItem} onPress={() => handleNavigate('Dashboard')}>
                     <Home color="#64748b" size={20} />
                     <Text style={styles.menuText}>Dashboard</Text>
@@ -50,6 +51,10 @@ const NavigationMenu = () => {
                   <TouchableOpacity style={styles.menuItem} onPress={() => handleNavigate('Users')}>
                     <UsersIcon color="#64748b" size={20} />
                     <Text style={styles.menuText}>Users</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.menuItem} onPress={() => handleNavigate('Report')}>
+                    <BarChart3 color="#64748b" size={20} />
+                    <Text style={styles.menuText}>Report</Text>
                   </TouchableOpacity>
                 </View>
               </TouchableWithoutFeedback>
@@ -69,8 +74,12 @@ const ProfileMenu = () => {
   return (
     <View>
       <TouchableOpacity onPress={() => setVisible(true)} style={{ padding: 10, flexDirection: 'row', alignItems: 'center' }}>
-        <UserCircle color="#0f172a" size={28} />
-        <Text style={{ marginLeft: 8, fontSize: 16, fontWeight: '600', color: '#0f172a' }}>{user?.name}</Text>
+        <Text style={{ marginRight: 8, fontSize: 16, fontWeight: '600', color: '#0f172a' }} numberOfLines={1}>{user?.name}</Text>
+        {user?.profile_image ? (
+          <Image source={{ uri: user.profile_image }} style={styles.headerAvatar} />
+        ) : (
+          <UserCircle color="#0f172a" size={28} />
+        )}
       </TouchableOpacity>
 
       <Modal visible={visible} transparent={true} animationType="fade">
@@ -78,7 +87,7 @@ const ProfileMenu = () => {
           <View style={styles.modalBackground}>
             <View style={styles.webConstraint}>
               <TouchableWithoutFeedback>
-                <View style={[styles.dropdownContainer, { left: 15, right: 'auto', width: 150 }]}>
+                <View style={[styles.dropdownContainer, { right: 15, left: 'auto', width: 150 }]}>
                   <TouchableOpacity style={styles.menuItem} onPress={() => { setVisible(false); navigation.navigate('Profile'); }}>
                     <User color="#475569" size={18} />
                     <Text style={styles.menuText}>Profile</Text>
@@ -102,9 +111,11 @@ export default function AdminNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerLeft: () => <ProfileMenu />,
-        headerRight: () => <NavigationMenu />,
-        headerTitle: '',
+        headerLeft: () => <NavigationMenu />,
+        headerRight: () => <ProfileMenu />,
+        headerTitle: 'Beza Pharmacy',
+        headerTitleAlign: 'center',
+        headerTitleStyle: { fontWeight: '800', fontSize: 18, color: '#0ea5e9' },
         headerStyle: { backgroundColor: '#ffffff' },
         headerTintColor: '#0f172a',
         headerShadowVisible: false, // removes the bottom border/shadow
@@ -114,6 +125,7 @@ export default function AdminNavigator() {
       <Stack.Screen name="Inventory" component={InventoryScreen} />
       <Stack.Screen name="Finance" component={FinanceScreen} />
       <Stack.Screen name="Users" component={UsersScreen} />
+      <Stack.Screen name="Report" component={ReportScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
     </Stack.Navigator>
   );
@@ -161,5 +173,10 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#f1f5f9',
     marginVertical: 4,
-  }
+  },
+  headerAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
 });

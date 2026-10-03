@@ -1,13 +1,32 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, FlatList, SafeAreaView, ActivityIndicator, ScrollView, TouchableOpacity } from 'react-native';
-import { Package, AlertTriangle } from 'lucide-react-native';
+import React, { useState, useEffect, useContext } from 'react';
+import { View, Text, TextInput, StyleSheet, FlatList, SafeAreaView, ActivityIndicator, ScrollView, TouchableOpacity, Modal, Alert, Platform } from 'react-native';
+import { Package } from 'lucide-react-native';
 import api from '../config/api';
+import { AuthContext } from '../context/AuthContext';
+import CustomDatePicker from '../components/CustomDatePicker';
+
+const toDay = (value) => {
+  if (!value) return '';
+  const text = String(value);
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+};
 
 export default function InventoryScreen({ route }) {
+  const { user } = useContext(AuthContext);
+  const isAdmin = user?.role === 'ADMIN';
   const [searchQuery, setSearchQuery] = useState('');
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [editing, setEditing] = useState(null);
+  const [editForm, setEditForm] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const fetchInventory = async () => {
     try {
@@ -25,6 +44,74 @@ export default function InventoryScreen({ route }) {
   useEffect(() => {
     fetchInventory();
   }, []);
+
+  const startEdit = (item) => {
+    setEditing(item);
+    setEditForm({
+      name: item.name || '',
+      category: item.category || '',
+      batch_number: item.batch_number || '',
+      quantity: String(item.stock ?? ''),
+      purchase_price: String(item.purchase_price ?? ''),
+      selling_price: String(item.selling_price ?? ''),
+      expiry_date: toDay(item.expiry_date),
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!editForm?.name.trim() || !editForm.batch_number.trim() || !editForm.expiry_date) {
+      Alert.alert('Missing details', 'Enter the name, batch, and expiry date.');
+      return;
+    }
+    const quantity = Number(editForm.quantity);
+    const purchase = Number(editForm.purchase_price);
+    const selling = Number(editForm.selling_price);
+    if (!(quantity >= 0) || !(purchase > 0) || !(selling > 0)) {
+      Alert.alert('Missing details', 'Enter a stock quantity and prices greater than zero.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const response = await api.put(`/stock/batches/${editing.batch_id}`, {
+        name: editForm.name.trim(),
+        category: editForm.category.trim(),
+        batch_number: editForm.batch_number.trim(),
+        quantity,
+        purchase_price: purchase,
+        selling_price: selling,
+        expiry_date: editForm.expiry_date,
+      });
+      if (response.data.success) {
+        setEditing(null);
+        setEditForm(null);
+        await fetchInventory();
+      }
+    } catch (error) {
+      Alert.alert('Could not save', error.response?.data?.message || 'Failed to update this medicine.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeItem = (item) => {
+    const run = async () => {
+      try {
+        const response = await api.delete(`/stock/batches/${item.batch_id}`);
+        if (response.data.success) await fetchInventory();
+      } catch (error) {
+        Alert.alert('Could not delete', error.response?.data?.message || 'Failed to remove this medicine.');
+      }
+    };
+    const message = `Remove ${item.name} from the store?`;
+    if (Platform.OS === 'web') {
+      if (window.confirm(message)) run();
+      return;
+    }
+    Alert.alert('Delete medicine', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: run },
+    ]);
+  };
 
   const categoriesCount = inventory.reduce((acc, item) => {
     const cat = item.category || 'Uncategorized';
@@ -100,6 +187,16 @@ export default function InventoryScreen({ route }) {
             <Text style={styles.infoValue}>{new Date(item.expiry_date).toLocaleDateString()}</Text>
           </View>
         </View>
+        {isAdmin ? (
+          <View style={styles.actionRow}>
+            <TouchableOpacity style={styles.editBtn} onPress={() => startEdit(item)}>
+              <Text style={styles.editBtnText}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.deleteBtn} onPress={() => removeItem(item)}>
+              <Text style={styles.deleteBtnText}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
       </View>
     );
   };
@@ -154,6 +251,49 @@ export default function InventoryScreen({ route }) {
           }
         />
       </View>
+
+      <Modal visible={!!editing} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Edit medicine</Text>
+            <ScrollView>
+              <Text style={styles.fieldLabel}>Name</Text>
+              <TextInput style={styles.fieldInput} value={editForm?.name} onChangeText={(value) => setEditForm((prev) => ({ ...prev, name: value }))} />
+              <Text style={styles.fieldLabel}>Category</Text>
+              <TextInput style={styles.fieldInput} value={editForm?.category} onChangeText={(value) => setEditForm((prev) => ({ ...prev, category: value }))} />
+              <Text style={styles.fieldLabel}>Batch</Text>
+              <TextInput style={styles.fieldInput} value={editForm?.batch_number} onChangeText={(value) => setEditForm((prev) => ({ ...prev, batch_number: value }))} />
+              <Text style={styles.fieldLabel}>Stock</Text>
+              <TextInput style={styles.fieldInput} keyboardType="numeric" value={editForm?.quantity} onChangeText={(value) => setEditForm((prev) => ({ ...prev, quantity: value }))} />
+              <Text style={styles.fieldLabel}>Purchase price</Text>
+              <TextInput style={styles.fieldInput} keyboardType="decimal-pad" value={editForm?.purchase_price} onChangeText={(value) => setEditForm((prev) => ({ ...prev, purchase_price: value }))} />
+              <Text style={styles.fieldLabel}>Selling price</Text>
+              <TextInput style={styles.fieldInput} keyboardType="decimal-pad" value={editForm?.selling_price} onChangeText={(value) => setEditForm((prev) => ({ ...prev, selling_price: value }))} />
+              <Text style={styles.fieldLabel}>Expiry date</Text>
+              <TouchableOpacity style={styles.fieldInput} onPress={() => setShowDatePicker(true)}>
+                <Text style={styles.infoValue}>{editForm?.expiry_date || 'Select date'}</Text>
+              </TouchableOpacity>
+            </ScrollView>
+            <TouchableOpacity style={styles.saveBtn} onPress={saveEdit} disabled={saving}>
+              {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.cancelBtn} onPress={() => { setEditing(null); setEditForm(null); }}>
+              <Text style={styles.cancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+      <CustomDatePicker
+        visible={showDatePicker}
+        date={editForm?.expiry_date ? new Date(`${editForm.expiry_date}T12:00:00`) : new Date()}
+        onConfirm={(selectedDate) => {
+          setShowDatePicker(false);
+          if (!selectedDate) return;
+          const localDate = new Date(selectedDate.getTime() - (selectedDate.getTimezoneOffset() * 60000));
+          setEditForm((prev) => ({ ...prev, expiry_date: localDate.toISOString().split('T')[0] }));
+        }}
+        onCancel={() => setShowDatePicker(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -284,5 +424,85 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#94a3b8',
     marginTop: 40,
-  }
+  },
+  actionRow: {
+    flexDirection: 'row',
+    marginTop: 14,
+  },
+  editBtn: {
+    backgroundColor: '#e0f2fe',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginRight: 8,
+  },
+  editBtnText: {
+    color: '#0369a1',
+    fontWeight: '700',
+  },
+  deleteBtn: {
+    backgroundColor: '#fee2e2',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  deleteBtnText: {
+    color: '#b91c1c',
+    fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 414,
+    maxHeight: '88%',
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 12,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748b',
+    marginBottom: 6,
+  },
+  fieldInput: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    color: '#0f172a',
+  },
+  saveBtn: {
+    backgroundColor: '#0ea5e9',
+    borderRadius: 10,
+    padding: 14,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  saveBtnText: {
+    color: '#fff',
+    fontWeight: '800',
+  },
+  cancelBtn: {
+    alignItems: 'center',
+    padding: 12,
+  },
+  cancelBtnText: {
+    color: '#64748b',
+    fontWeight: '700',
+  },
 });

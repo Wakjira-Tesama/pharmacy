@@ -6,7 +6,7 @@ import { AuthContext } from '../context/AuthContext';
 import api from '../config/api';
 
 export default function ProfileScreen({ navigation }) {
-  const { user, logout } = useContext(AuthContext);
+  const { user, updateUser } = useContext(AuthContext);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -59,6 +59,7 @@ export default function ProfileScreen({ navigation }) {
         const asset = result.assets[0];
         const base64Image = `data:image/jpeg;base64,${asset.base64}`;
         setProfileImage(base64Image);
+        updateUser({ profile_image: base64Image });
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -85,6 +86,7 @@ export default function ProfileScreen({ navigation }) {
         const asset = result.assets[0];
         const base64Image = `data:image/jpeg;base64,${asset.base64}`;
         setProfileImage(base64Image);
+        updateUser({ profile_image: base64Image });
       }
     } catch (error) {
       console.error('Error taking photo:', error);
@@ -94,6 +96,7 @@ export default function ProfileScreen({ navigation }) {
 
   const removeImage = () => {
     setProfileImage('');
+    updateUser({ profile_image: null });
   };
 
   const handleSave = async () => {
@@ -117,6 +120,11 @@ export default function ProfileScreen({ navigation }) {
       const response = await api.put('/auth/profile', payload);
 
       if (response.data.success) {
+        updateUser({
+          name: name.trim(),
+          username: username.trim(),
+          profile_image: profileImage || null,
+        });
         Alert.alert('Success', 'Profile updated successfully!');
         setPassword('');
       }

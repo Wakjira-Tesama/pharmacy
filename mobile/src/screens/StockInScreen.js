@@ -27,6 +27,7 @@ export default function StockInScreen({ navigation }) {
   const [newMedicineName, setNewMedicineName] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [datePickerValue, setDatePickerValue] = useState(new Date());
+  const [sellingEdited, setSellingEdited] = useState(false);
 
   useEffect(() => {
     fetchMedicines();
@@ -57,6 +58,17 @@ export default function StockInScreen({ navigation }) {
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handlePurchaseChange = (value) => {
+    setFormData(prev => {
+      const next = { ...prev, purchase_price: value };
+      const purchase = Number(value);
+      if (!sellingEdited) {
+        next.selling_price = value && purchase > 0 ? (purchase * 1.25).toFixed(2) : '';
+      }
+      return next;
+    });
   };
 
   const selectMedicine = (medicine) => {
@@ -123,9 +135,9 @@ export default function StockInScreen({ navigation }) {
   );
 
   const handleSave = async () => {
-    const { medicine_id, quantity, purchase_price, expiry_date } = formData;
-    if (!medicine_id || !quantity || !purchase_price || !expiry_date) {
-      Alert.alert('Error', 'Please fill in all required fields.');
+    const { medicine_id, quantity, purchase_price, expiry_date, category } = formData;
+    if (!medicine_id || !category || !quantity || !purchase_price || !expiry_date) {
+      Alert.alert('Error', 'Please fill in medicine, category, quantity, purchase price, and expiry date.');
       return;
     }
 
@@ -134,37 +146,34 @@ export default function StockInScreen({ navigation }) {
       return;
     }
 
+    if (isNaN(purchase_price) || Number(purchase_price) <= 0) {
+      Alert.alert('Error', 'Purchase price must be greater than zero.');
+      return;
+    }
+
     setLoading(true);
     try {
-      // Auto-generate batch number
-      const batchNum = formData.batch_number || ('B' + Date.now().toString().slice(-6));
+      const batchNum = formData.batch_number.trim() || ('B' + Date.now().toString().slice(-6));
+      const purchase = parseFloat(purchase_price);
       const sellingPrice = formData.selling_price
         ? parseFloat(formData.selling_price)
-        : parseFloat(purchase_price) * 1.3;
+        : Number((purchase * 1.25).toFixed(2));
 
       const response = await api.post('/stock/in', {
-        medicine_id: parseInt(medicine_id),
+        medicine_id: parseInt(medicine_id, 10),
         batch_number: batchNum,
-        quantity: parseInt(quantity),
-        purchase_price: parseFloat(purchase_price),
+        quantity: parseInt(quantity, 10),
+        purchase_price: purchase,
         selling_price: sellingPrice,
         manufacturing_date: new Date().toISOString().split('T')[0],
         expiry_date,
-        supplier_id: 1
+        category: category.trim(),
       });
 
-      // Update medicine category if changed
-      if (formData.category) {
-        try {
-          // This is a simple approach - could also add a dedicated endpoint
-          await api.put ? null : null; // Category is already on the medicine record
-        } catch (e) { /* ignore */ }
-      }
-
       if (response.data.success) {
-        Alert.alert('Success', 'Stock received successfully!', [
-          { text: 'OK', onPress: () => navigation.goBack() }
-        ]);
+        if (Platform.OS === 'web') window.alert('Stock received successfully.');
+        else Alert.alert('Success', 'Stock received successfully.');
+        navigation.goBack();
       }
     } catch (error) {
       Alert.alert('Error', error.response?.data?.message || 'Failed to save stock in');
@@ -222,7 +231,7 @@ export default function StockInScreen({ navigation }) {
                 placeholder="0.00"
                 keyboardType="numeric"
                 value={formData.purchase_price}
-                onChangeText={(v) => handleInputChange('purchase_price', v)}
+                onChangeText={handlePurchaseChange}
               />
             </View>
           </View>
@@ -232,10 +241,13 @@ export default function StockInScreen({ navigation }) {
               <Text style={styles.label}>Selling Price</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Auto +30%"
+                placeholder="Auto +25%"
                 keyboardType="numeric"
                 value={formData.selling_price}
-                onChangeText={(v) => handleInputChange('selling_price', v)}
+                onChangeText={(v) => {
+                  setSellingEdited(v !== '');
+                  handleInputChange('selling_price', v);
+                }}
               />
             </View>
             <View style={[styles.column, { marginLeft: 8 }]}>

@@ -1,15 +1,49 @@
-import React, { useState, useContext } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, SafeAreaView, Dimensions, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useContext, useEffect, useRef } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, SafeAreaView, KeyboardAvoidingView, Platform, Animated, Easing, useWindowDimensions } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
-import { Pill } from 'lucide-react-native'; // Adding an icon
-
-const { width, height } = Dimensions.get('window');
 
 export default function LoginScreen({ navigation }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const { login, isLoading } = useContext(AuthContext);
   const [localLoading, setLocalLoading] = useState(false);
+  const { width } = useWindowDimensions();
+  const wide = width >= 860;
+  const motion = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(motion, {
+          toValue: 1,
+          duration: 3200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: false,
+        }),
+        Animated.timing(motion, {
+          toValue: 0,
+          duration: 3200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: false,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [motion]);
+
+  const rotateY = motion.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['-28deg', '28deg'],
+  });
+  const rotateX = motion.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: ['14deg', '-10deg', '14deg'],
+  });
+  const lift = motion.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0, -16, 0],
+  });
 
   const handleLogin = async () => {
     if (!username || !password) {
@@ -32,16 +66,23 @@ export default function LoginScreen({ navigation }) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        <View style={styles.content}>
-          <View style={styles.headerContainer}>
-            <View style={styles.logoContainer}>
-              <Pill color="#0ea5e9" size={48} />
-            </View>
-            <Text style={styles.title}>Beza Pharmacy</Text>
+        <View style={[styles.content, wide && styles.contentWide]}>
+          <View style={[styles.headerContainer, wide && styles.headerWide]}>
+            <Animated.View style={[styles.stage, { transform: [{ translateY: lift }] }]}>
+              <Animated.View
+                style={[
+                  styles.logoContainer,
+                  { transform: [{ perspective: 900 }, { rotateX }, { rotateY }] },
+                ]}
+              >
+                <Text style={styles.logoLetter}>B</Text>
+              </Animated.View>
+            </Animated.View>
+            <Text style={[styles.title, wide && styles.titleWide]}>Welcome to Beza Pharmacy</Text>
             <Text style={styles.subtitle}>Sign in to continue</Text>
           </View>
 
-          <View style={styles.formContainer}>
+          <View style={[styles.formContainer, wide && styles.formWide]}>
             <Text style={styles.label}>Username</Text>
             <TextInput
               style={styles.input}
@@ -74,12 +115,6 @@ export default function LoginScreen({ navigation }) {
               )}
             </TouchableOpacity>
           </View>
-          
-          <View style={styles.hintContainer}>
-            <Text style={styles.hintText}>Demo Accounts:</Text>
-            <Text style={styles.hintText}>Admin: admin / Admin@123</Text>
-            <Text style={styles.hintText}>Pharmacist: pharmacist / Pharmacy@123</Text>
-          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -99,27 +134,55 @@ const styles = StyleSheet.create({
     padding: 24,
     justifyContent: 'center',
   },
+  contentWide: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 48,
+    gap: 48,
+  },
   headerContainer: {
     alignItems: 'center',
     marginBottom: 40,
   },
+  headerWide: {
+    flex: 1,
+    marginBottom: 0,
+    maxWidth: 460,
+  },
+  stage: {
+    marginBottom: 8,
+  },
   logoContainer: {
-    backgroundColor: '#ffffff',
-    padding: 16,
+    backgroundColor: '#0ea5e9',
+    width: 84,
+    height: 84,
     borderRadius: 24,
     marginBottom: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#0ea5e9',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 10,
   },
+  logoLetter: {
+    color: '#ffffff',
+    fontSize: 52,
+    fontWeight: '900',
+    lineHeight: 58,
+  },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '800',
     color: '#0f172a',
     marginBottom: 8,
     letterSpacing: -0.5,
+    textAlign: 'center',
+  },
+  titleWide: {
+    fontSize: 40,
   },
   subtitle: {
     fontSize: 16,
@@ -135,6 +198,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 20,
     elevation: 5,
+  },
+  formWide: {
+    width: 440,
+    flexGrow: 0,
   },
   label: {
     fontSize: 14,
@@ -170,13 +237,4 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  hintContainer: {
-    marginTop: 40,
-    alignItems: 'center',
-  },
-  hintText: {
-    color: '#94a3b8',
-    fontSize: 13,
-    marginBottom: 4,
-  }
 });

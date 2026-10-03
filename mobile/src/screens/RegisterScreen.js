@@ -1,7 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
-import { Pill, ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft } from 'lucide-react-native';
 
 export default function RegisterScreen({ navigation }) {
   const [name, setName] = useState('');
@@ -42,7 +42,7 @@ export default function RegisterScreen({ navigation }) {
 
           <View style={styles.headerContainer}>
             <View style={styles.logoContainer}>
-              <Pill color="#0ea5e9" size={40} />
+              <Text style={styles.logoLetter}>B</Text>
             </View>
             <Text style={styles.title}>Create Account</Text>
             <Text style={styles.subtitle}>Join Beza Pharmacy today</Text>
@@ -146,15 +146,24 @@ const styles = StyleSheet.create({
     marginTop: 40,
   },
   logoContainer: {
-    backgroundColor: '#ffffff',
-    padding: 12,
+    backgroundColor: '#0ea5e9',
+    width: 76,
+    height: 76,
     borderRadius: 20,
     marginBottom: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#0ea5e9',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 5,
+  },
+  logoLetter: {
+    color: '#ffffff',
+    fontSize: 46,
+    fontWeight: '900',
+    lineHeight: 52,
   },
   title: {
     fontSize: 28,

@@ -25,7 +25,6 @@ export default function PharmacistDashboard() {
   const { user } = useContext(AuthContext);
   const navigation = useNavigation();
   const [stats, setStats] = useState(null);
-  const [finance, setFinance] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showSalesModal, setShowSalesModal] = useState(false);
@@ -34,12 +33,8 @@ export default function PharmacistDashboard() {
 
   const fetchData = async () => {
     try {
-      const [statsRes, financeRes] = await Promise.all([
-        api.get('/reports/dashboard'),
-        api.get('/finance/daily')
-      ]);
+      const statsRes = await api.get('/reports/dashboard');
       if (statsRes.data.success) setStats(statsRes.data.data);
-      if (financeRes.data.success) setFinance(financeRes.data.data);
     } catch (error) {
       console.error('Failed to load dashboard data', error);
     } finally {
@@ -89,10 +84,6 @@ export default function PharmacistDashboard() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0ea5e9']} />
         }
       >
-        <View style={styles.titleContainer}>
-          <Text style={styles.mainTitle}>Beza Pharmacy</Text>
-        </View>
-        
         <Text style={styles.sectionTitle}>Daily Operations</Text>
         <View style={styles.actionContainer}>
           <ActionButton title="Sell" icon={ShoppingCart} color="#0ea5e9" onPress={() => navigation.navigate('POS')} />
@@ -106,12 +97,15 @@ export default function PharmacistDashboard() {
           <StatCard title="Available Stock" value={stats?.totalStock || 0} color="#8b5cf6" onPress={() => navigation.navigate('Inventory')} />
           <StatCard title="Low Stock" value={stats?.lowStock || 0} color="#f59e0b" onPress={() => navigation.navigate('Inventory', { filter: 'lowStock' })} />
           <StatCard title="Expiring Soon" value={stats?.expiringSoon || 0} color="#f97316" onPress={() => navigation.navigate('Inventory', { filter: 'expiringSoon' })} />
+          <StatCard title="Expired" value={stats?.expired || 0} color="#ef4444" onPress={() => navigation.navigate('Inventory', { filter: 'expired' })} />
         </View>
 
         <Text style={styles.sectionTitle}>Today's Performance</Text>
         <View style={styles.cardContainer}>
           <StatCard title="Sales Count" value={stats?.todaySalesCount || 0} color="#10b981" onPress={openSalesModal} />
-          <StatCard title="Today's Income" value={`${finance?.income || 0} ETB`} color="#10b981" onPress={openSalesModal} />
+          <StatCard title="Purchase" value={`${Number(stats?.purchase || 0).toFixed(2)} ETB`} color="#f97316" onPress={openSalesModal} />
+          <StatCard title="Selling" value={`${Number(stats?.selling || 0).toFixed(2)} ETB`} color="#16a34a" onPress={openSalesModal} />
+          <StatCard title="Balance" value={`${Number(stats?.balance || 0).toFixed(2)} ETB`} color="#2563eb" onPress={openSalesModal} />
         </View>
         <View style={{height: 40}} />
       </ScrollView>
@@ -160,20 +154,6 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-  },
-  titleContainer: {
-    alignItems: 'center',
-    marginVertical: 16,
-  },
-  mainTitle: {
-    fontSize: 32,
-    fontWeight: '900',
-    color: '#0ea5e9',
-    textShadowColor: 'rgba(14, 165, 233, 0.3)',
-    textShadowOffset: { width: 0, height: 4 },
-    textShadowRadius: 8,
-    letterSpacing: 1,
-    marginBottom: 20,
   },
   sectionTitle: {
     fontSize: 18,

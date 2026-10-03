@@ -52,6 +52,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateUser = (changes) => {
+    setUser((current) => (current ? { ...current, ...changes } : current));
+  };
+
   const logout = async () => {
     setIsLoading(true);
     try {
@@ -85,7 +89,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout, register }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout, register, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

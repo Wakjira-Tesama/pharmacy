@@ -1,17 +1,26 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { Platform, View, StyleSheet } from 'react-native';
-import { AuthProvider } from './src/context/AuthContext';
+import { AuthProvider, AuthContext } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
+
+function AppFrame() {
+  const { user } = useContext(AuthContext);
+  const wideLogin = Platform.OS === 'web' && !user;
+
+  return (
+    <View style={styles.container}>
+      <View style={Platform.OS === 'web' ? [styles.webContainer, wideLogin && styles.webWide] : styles.mobileContainer}>
+        <AppNavigator />
+      </View>
+    </View>
+  );
+}
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <View style={Platform.OS === 'web' ? styles.webContainer : styles.mobileContainer}>
-        <AuthProvider>
-          <AppNavigator />
-        </AuthProvider>
-      </View>
-    </View>
+    <AuthProvider>
+      <AppFrame />
+    </AuthProvider>
   );
 }
 
@@ -34,6 +43,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 10,
     elevation: 5,
+  },
+  webWide: {
+    maxWidth: 1100,
+    maxHeight: '100%',
+    backgroundColor: '#f0f9ff',
+    overflow: 'visible',
+    shadowOpacity: 0,
   },
   mobileContainer: {
     flex: 1,

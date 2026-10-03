@@ -1,5 +1,6 @@
 import React, { useState, useContext } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, TouchableWithoutFeedback, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, TouchableWithoutFeedback, Platform, Image } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Menu, Home, ShoppingCart, ArrowDownToLine, PackageSearch, UserCircle, User, LogOut } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -33,7 +34,7 @@ const NavigationMenu = () => {
           <View style={styles.modalBackground}>
             <View style={styles.webConstraint}>
               <TouchableWithoutFeedback>
-                <View style={[styles.dropdownContainer, { right: 15, left: 'auto' }]}>
+                <View style={[styles.dropdownContainer, { left: 15, right: 'auto' }]}>
                   <TouchableOpacity style={styles.menuItem} onPress={() => handleNavigate('Dashboard')}>
                     <Home color="#64748b" size={20} />
                     <Text style={styles.menuText}>Dashboard</Text>
@@ -67,9 +68,13 @@ const ProfileMenu = () => {
 
   return (
     <View>
-      <TouchableOpacity onPress={() => setVisible(true)} style={{ padding: 10, flexDirection: 'row', alignItems: 'center' }}>
-        <UserCircle color="#0f172a" size={28} />
-        <Text style={{ marginLeft: 8, fontSize: 16, fontWeight: '600', color: '#0f172a' }}>{user?.name}</Text>
+      <TouchableOpacity onPress={() => setVisible(true)} style={styles.profileButton}>
+        <Text style={styles.profileName} numberOfLines={1}>{user?.name}</Text>
+        {user?.profile_image ? (
+          <Image source={{ uri: user.profile_image }} style={styles.headerAvatar} />
+        ) : (
+          <UserCircle color="#0f172a" size={26} />
+        )}
       </TouchableOpacity>
 
       <Modal visible={visible} transparent={true} animationType="fade">
@@ -77,7 +82,7 @@ const ProfileMenu = () => {
           <View style={styles.modalBackground}>
             <View style={styles.webConstraint}>
               <TouchableWithoutFeedback>
-                <View style={[styles.dropdownContainer, { left: 15, right: 'auto', width: 150 }]}>
+                <View style={[styles.dropdownContainer, { right: 15, left: 'auto', width: 150 }]}>
                   <TouchableOpacity style={styles.menuItem} onPress={() => { setVisible(false); navigation.navigate('Profile'); }}>
                     <User color="#475569" size={18} />
                     <Text style={styles.menuText}>Profile</Text>
@@ -101,12 +106,15 @@ export default function PharmacistNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerLeft: () => <ProfileMenu />,
-        headerRight: () => <NavigationMenu />,
-        headerTitle: '',
-        headerStyle: { backgroundColor: '#ffffff' },
-        headerTintColor: '#0f172a',
-        headerShadowVisible: false, // removes the bottom border/shadow
+        header: () => (
+          <SafeAreaView edges={['top']} style={styles.headerSafe}>
+            <View style={styles.headerBar}>
+              <NavigationMenu />
+              <Text style={styles.headerTitle} numberOfLines={1}>Beza Pharmacy</Text>
+              <ProfileMenu />
+            </View>
+          </SafeAreaView>
+        ),
       }}
     >
       <Stack.Screen name="Dashboard" component={PharmacistDashboard} />
@@ -160,5 +168,45 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#f1f5f9',
     marginVertical: 4,
-  }
+  },
+  headerSafe: {
+    backgroundColor: '#ffffff',
+  },
+  headerBar: {
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    paddingHorizontal: 4,
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontWeight: '800',
+    fontSize: 16,
+    color: '#0ea5e9',
+    marginHorizontal: 4,
+  },
+  profileButton: {
+    maxWidth: 118,
+    paddingVertical: 8,
+    paddingRight: 10,
+    paddingLeft: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  profileName: {
+    maxWidth: 72,
+    marginRight: 4,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  headerAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
 });
