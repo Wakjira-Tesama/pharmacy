@@ -76,6 +76,17 @@ const getDailyFinance = async (req, res) => {
       FROM expense_transactions
     `);
 
+    const [expiredRows] = await pool.query(`
+      SELECT COALESCE(SUM(current_quantity * purchase_price), 0) AS expired_cost
+      FROM medicine_batches
+      WHERE current_quantity > 0 AND expiry_date = CURDATE()
+    `);
+    const [stockRows] = await pool.query(`
+      SELECT COALESCE(SUM(current_quantity * purchase_price), 0) AS stock_value
+      FROM medicine_batches
+      WHERE current_quantity > 0
+    `);
+
     const days = daysInCurrentMonth();
     const onceToday = Number(expenseRows[0].once_today) || 0;
     const dailySum = Number(expenseRows[0].daily_sum) || 0;
@@ -83,13 +94,17 @@ const getDailyFinance = async (req, res) => {
     const income = Number(incomeRows[0].total_income) || 0;
     const expense = Number((onceToday + dailySum + monthlyDaily).toFixed(2));
     const balance = Number((income - expense).toFixed(2));
+    const expiredCost = Number(Number(expiredRows[0].expired_cost).toFixed(2));
+    const stockValue = Number(Number(stockRows[0].stock_value).toFixed(2));
 
     res.json({
       success: true,
       data: {
         income,
         expense,
-        balance
+        balance,
+        expiredCost,
+        stockValue
       }
     });
   } catch (error) {
