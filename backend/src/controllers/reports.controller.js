@@ -33,6 +33,16 @@ const getDashboardStats = async (req, res) => {
       FROM sales 
       WHERE DATE(created_at) = CURDATE()
     `);
+    const [todayCost] = await pool.query(`
+      SELECT COALESCE(SUM(si.quantity * b.purchase_price), 0) AS purchase
+      FROM sale_items si
+      JOIN sales s ON s.id = si.sale_id
+      JOIN medicine_batches b ON b.id = si.batch_id
+      WHERE DATE(s.created_at) = CURDATE()
+    `);
+    const purchase = Number(Number(todayCost[0].purchase || 0).toFixed(2));
+    const selling = Number((purchase * 1.25).toFixed(2));
+    const balance = Number((selling - purchase).toFixed(2));
 
     res.json({
       success: true,
@@ -43,7 +53,10 @@ const getDashboardStats = async (req, res) => {
         expiringSoon: expiringSoon[0].total || 0,
         expired: expired[0].total || 0,
         todaySalesCount: todaySales[0].count || 0,
-        todaysRevenue: todaySales[0].revenue || 0
+        todaysRevenue: todaySales[0].revenue || 0,
+        purchase,
+        selling,
+        balance
       }
     });
   } catch (error) {
