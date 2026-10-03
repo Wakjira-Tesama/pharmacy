@@ -71,7 +71,7 @@ const getInventory = async (req, res) => {
   try {
     const query = `
       SELECT m.id as medicine_id, m.name, m.medicine_code, m.minimum_stock, m.category,
-             b.id as batch_id, b.batch_number, b.expiry_date, b.selling_price, b.current_quantity as stock,
+             b.id as batch_id, b.batch_number, b.expiry_date, b.purchase_price, b.selling_price, b.current_quantity as stock,
              DATEDIFF(b.expiry_date, CURDATE()) as days_to_expiry
       FROM medicines m
       JOIN medicine_batches b ON m.id = b.medicine_id
@@ -86,4 +86,106 @@ const getInventory = async (req, res) => {
   }
 };
 
-module.exports = { stockIn, getInventory };
+const updateBatch = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const id = Number(req.params.id);
+    const { name, category, batch_number, expiry_date, purchase_price, selling_price, quantity } = req.body;
+    const purchase = Number(purchase_price);
+    const selling = Number(selling_price);
+    const qty = parseInt(quantity, 10);
+    const batchNumber = String(batch_number || '').trim().slice(0, 50);
+    const medicineName = String(name || '').trim().slice(0, 200);
+
+    if (!id || !medicineName || !batchNumber || !expiry_date || !(purchase > 0) || !(selling > 0) || Number.isNaN(qty) || qty < 0) {
+      return res.status(400).json({ success: false, message: 'Name, batch, quantity, prices, and expiry date are required' });
+    }
+
+    await connection.beginTransaction();
+    const [rows] = await connection.query(
+      'SELECT id, medicine_id, current_quantity FROM medicine_batches WHERE id = ?',
+      [id]
+    );
+    if (!rows.length) {
+      await connection.rollback();
+      return res.status(404).json({ success: false, message: 'Stock item not found' });
+    }
+
+    const previous = Number(rows[0].current_quantity) || 0;
+    await connection.query(
+      `UPDATE medicine_batches
+       SET batch_number = ?, expiry_date = ?, purchase_price = ?, selling_price = ?, current_quantity = ?
+       WHERE id = ?`,
+      [batchNumber, expiry_date, purchase, selling, qty, id]
+    );
+    await connection.query(
+      'UPDATE medicines SET name = ?, category = ? WHERE id = ?',
+      [medicineName, category ? String(category).trim().slice(0, 100) : null, rows[0].medicine_id]
+    );
+    if (previous !== qty) {
+      await connection.query(
+        `INSERT INTO stock_transactions (medicine_id, batch_id, transaction_type, quantity, previous_quantity, new_quantity, user_id, reason)
+         VALUES (?, ?, 'ADJUSTMENT', ?, ?, ?, ?, 'Stock edited')`,
+        [rows[0].medicine_id, id, Math.abs(qty - previous), previous, qty, req.user.id]
+      );
+    }
+
+    await connection.commit();
+    res.json({ success: true, message: 'Stock updated' });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Update stock error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  } finally {
+    connection.release();
+  }
+};
+
+const deleteBatch = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const id = Number(req.params.id);
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Stock item is required' });
+    }
+
+    await connection.beginTransaction();
+    const [rows] = await connection.query(
+      'SELECT id, medicine_id, current_quantity FROM medicine_batches WHERE id = ?',
+      [id]
+    );
+    if (!rows.length) {
+      await connection.rollback();
+      return res.status(404).json({ success: false, message: 'Stock item not found' });
+    }
+
+    const [sales] = await connection.query('SELECT COUNT(*) AS total FROM sale_items WHERE batch_id = ?', [id]);
+    const sold = Number(sales[0].total) || 0;
+    const previous = Number(rows[0].current_quantity) || 0;
+
+    if (sold > 0) {
+      await connection.query('UPDATE medicine_batches SET current_quantity = 0 WHERE id = ?', [id]);
+      if (previous > 0) {
+        await connection.query(
+          `INSERT INTO stock_transactions (medicine_id, batch_id, transaction_type, quantity, previous_quantity, new_quantity, user_id, reason)
+           VALUES (?, ?, 'REMOVED', ?, ?, 0, ?, 'Removed from store')`,
+          [rows[0].medicine_id, id, previous, previous, req.user.id]
+        );
+      }
+    } else {
+      await connection.query('DELETE FROM stock_transactions WHERE batch_id = ?', [id]);
+      await connection.query('DELETE FROM medicine_batches WHERE id = ?', [id]);
+    }
+
+    await connection.commit();
+    res.json({ success: true, message: 'Removed from store' });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Delete stock error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  } finally {
+    connection.release();
+  }
+};
+
+module.exports = { stockIn, getInventory, updateBatch, deleteBatch };
